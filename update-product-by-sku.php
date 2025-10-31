@@ -3,7 +3,7 @@
  * Plugin Name: Update Products by SKU (Batch Endpoint)
  * Plugin URI: https://gusanitolector.pe/
  * Description: Endpoint REST personalizado para actualizar uno o varios productos de WooCommerce por SKU.
- * Version: 1.3.3
+ * Version: 1.3.8
  * Author: Enmanuel Nava
  * Author URI: https://interkambio.com/
  * Requires at least: 5.8
@@ -16,7 +16,7 @@
  * Domain Path: /languages
  *
  * @package UpdateProductsBySKU
- * @version 1.3.3
+ * @version 1.3.8
  * @author Enmanuel
  */
 
@@ -155,31 +155,92 @@ function enma_wc_update_products_by_sku_batch(WP_REST_Request $request)
         }
 
         // =========================
-        // Imágenes (usando URLs externas)
+        // Manejo de imágenes (array de WooCommerce)
         // =========================
-        if (!empty($entry['image'])) {
-            // Si viene una sola imagen
-            $image_url = esc_url_raw($entry['image']);
-            $product->set_image_id(0); // limpiar cualquier imagen anterior
-            $product->set_props([
-                'image_id' => '',
-                'images' => [
-                    ['src' => $image_url]
-                ],
-            ]);
-        } elseif (!empty($entry['images']) && is_array($entry['images'])) {
-            // Si viene un array de imágenes (galería)
-            $images = [];
-            foreach ($entry['images'] as $img) {
-                if (!empty($img['src'])) {
-                    $images[] = ['src' => esc_url_raw($img['src'])];
+        require_once(ABSPATH . 'wp-admin/includes/file.php');
+        require_once(ABSPATH . 'wp-admin/includes/media.php');
+        require_once(ABSPATH . 'wp-admin/includes/image.php');
+
+        if (!empty($entry['images']) && is_array($entry['images'])) {
+            $image_urls = array_column($entry['images'], 'src');
+            if (!empty($image_urls)) {
+                $first_image = $image_urls[0];
+                $response = wp_remote_get($first_image);
+
+                if (!is_wp_error($response)) {
+                    $image_data = wp_remote_retrieve_body($response);
+                    $upload_dir = wp_upload_dir();
+                    $filename = basename($first_image);
+                    $filename_no_ext = pathinfo($filename, PATHINFO_FILENAME);
+                    $file = $upload_dir['path'] . '/' . $filename;
+                    file_put_contents($file, $image_data);
+
+                    $wp_filetype = wp_check_filetype($filename, null);
+                    if (empty($wp_filetype['type']) && str_ends_with(strtolower($filename), '.webp')) {
+                        $wp_filetype['type'] = 'image/webp';
+                    }
+
+                    $attachment = [
+                        'post_mime_type' => $wp_filetype['type'],
+                        'post_title' => sanitize_file_name($filename_no_ext),
+                        'post_content' => '',
+                        'post_status' => 'inherit',
+                    ];
+
+                    // Eliminar thumbnail anterior
+                    $old_thumb_id = get_post_thumbnail_id($product_id);
+                    if ($old_thumb_id)
+                        wp_delete_attachment($old_thumb_id, true);
+
+                    // Crear el nuevo attachment
+                    $attach_id = wp_insert_attachment($attachment, $file, $product_id);
+
+                    $attach_data = wp_generate_attachment_metadata($attach_id, $file);
+                    wp_update_attachment_metadata($attach_id, $attach_data);
+
+                    // Asignar como imagen destacada
+                    update_post_meta($product_id, '_thumbnail_id', $attach_id);
+                    $product->set_image_id($attach_id);
+
+                    // Si hay más imágenes → galería
+                    if (count($image_urls) > 1) {
+                        $gallery_ids = [];
+                        for ($i = 1; $i < count($image_urls); $i++) {
+                            $extra = $image_urls[$i];
+                            $resp2 = wp_remote_get($extra);
+                            if (!is_wp_error($resp2)) {
+                                $data2 = wp_remote_retrieve_body($resp2);
+                                $filename2 = basename($extra);
+                                $filename2_no_ext = pathinfo($filename2, PATHINFO_FILENAME);
+                                $file2 = $upload_dir['path'] . '/' . $filename2;
+                                file_put_contents($file2, $data2);
+
+                                $ft2 = wp_check_filetype($filename2, null);
+                                if (empty($ft2['type']) && str_ends_with(strtolower($filename2), '.webp')) {
+                                    $ft2['type'] = 'image/webp';
+                                }
+
+                                $att2 = [
+                                    'post_mime_type' => $ft2['type'],
+                                    'post_title' => sanitize_file_name($filename2_no_ext),
+                                    'post_content' => '',
+                                    'post_status' => 'inherit',
+                                ];
+
+                                $id2 = wp_insert_attachment($att2, $file2, $product_id);
+                                $data2meta = wp_generate_attachment_metadata($id2, $file2);
+                                wp_update_attachment_metadata($id2, $data2meta);
+                                $gallery_ids[] = $id2;
+                            }
+                        }
+                        $product->set_gallery_image_ids($gallery_ids);
+                    }
+
+                    // Limpiar caché
+                    wc_delete_product_transients($product_id);
                 }
             }
-            if (!empty($images)) {
-                $product->set_props(['images' => $images]);
-            }
         }
-
 
         // =========================
         // Categorías
