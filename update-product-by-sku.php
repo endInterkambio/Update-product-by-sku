@@ -3,7 +3,7 @@
  * Plugin Name: Update Products by SKU (Batch Endpoint)
  * Plugin URI: https://gusanitolector.pe/
  * Description: Endpoint REST personalizado para actualizar uno o varios productos de WooCommerce por SKU.
- * Version: 1.3.9
+ * Version: 1.4.0
  * Author: Enmanuel Nava
  * Author URI: https://interkambio.com/
  * Requires at least: 5.8
@@ -16,7 +16,7 @@
  * Domain Path: /languages
  *
  * @package UpdateProductsBySKU
- * @version 1.3.9
+ * @version 1.4.0
  * @author Enmanuel
  */
 
@@ -171,9 +171,9 @@ function enma_wc_update_products_by_sku_batch(WP_REST_Request $request)
                     $image_data = wp_remote_retrieve_body($response);
                     $upload_dir = wp_upload_dir();
                     $filename = basename($first_image);
-                    $filename_no_ext = pathinfo($filename, PATHINFO_FILENAME);
                     // Generar nombre único como hace WordPress (evita conflictos)
                     $unique_filename = wp_unique_filename($upload_dir['path'], $filename);
+                    $filename_no_ext = pathinfo($unique_filename, PATHINFO_FILENAME);
                     $file = trailingslashit($upload_dir['path']) . $unique_filename;
                     file_put_contents($file, $image_data);
 
@@ -213,8 +213,8 @@ function enma_wc_update_products_by_sku_batch(WP_REST_Request $request)
                             if (!is_wp_error($resp2)) {
                                 $data2 = wp_remote_retrieve_body($resp2);
                                 $filename2 = basename($extra);
-                                $filename2_no_ext = pathinfo($filename2, PATHINFO_FILENAME);
                                 $unique_filename2 = wp_unique_filename($upload_dir['path'], $filename2);
+                                $filename2_no_ext = pathinfo($unique_filename2, PATHINFO_FILENAME);
                                 $file2 = trailingslashit($upload_dir['path']) . $unique_filename2;
                                 file_put_contents($file2, $data2);
 
