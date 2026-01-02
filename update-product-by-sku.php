@@ -1,9 +1,10 @@
 <?php
+
 /**
  * Plugin Name: Update Products by SKU (Batch Endpoint)
  * Plugin URI: https://gusanitolector.pe/
  * Description: Endpoint REST personalizado para actualizar uno o varios productos de WooCommerce por SKU.
- * Version: 1.5.0
+ * Version: 1.6.2
  * Author: Enmanuel Nava
  * Author URI: https://interkambio.com/
  * Requires at least: 5.8
@@ -16,7 +17,7 @@
  * Domain Path: /languages
  *
  * @package UpdateProductsBySKU
- * @version 1.5.0
+ * @version 1.6.2
  * @author Enmanuel
  */
 
@@ -46,6 +47,44 @@ add_action('rest_api_init', function () {
         'callback' => 'enma_wc_update_products_by_sku_batch',
         'permission_callback' => '__return_true', // Usa Basic Auth (WooCommerce maneja la autenticación)
     ]);
+
+    register_rest_route('wc/v3', '/products/exists-by-sku', [
+        'methods' => 'POST',
+        'callback' => function (WP_REST_Request $request) {
+
+            $params = $request->get_json_params();
+            $skus = $params['skus'] ?? [];
+
+            if (empty($skus) || !is_array($skus)) {
+                return new WP_REST_Response(['error' => 'Lista de SKUs requerida'], 400);
+            }
+
+            $response = [];
+
+            foreach (array_unique($skus) as $sku) {
+                $product_id = wc_get_product_id_by_sku($sku);
+
+                if (!$product_id) {
+                    $response[$sku] = [
+                        'exists' => false,
+                    ];
+                    continue;
+                }
+
+                $status = get_post_status($product_id);
+
+                $response[$sku] = [
+                    'exists' => true,
+                    'published' => $status === 'publish',
+                    'status' => $status,
+                ];
+            }
+
+            return rest_ensure_response($response);
+        },
+        'permission_callback' => '__return_true',
+    ]);
+
 
     if (defined('WP_DEBUG') && WP_DEBUG) {
         error_log('Ruta /wc/v3/products/update-by-sku registrada correctamente (batch).');
