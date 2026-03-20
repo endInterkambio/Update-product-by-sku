@@ -4,7 +4,7 @@
  * Plugin Name: Update Products by SKU (Batch Endpoint)
  * Plugin URI: https://gusanitolector.pe/
  * Description: Endpoint REST personalizado para actualizar uno o varios productos de WooCommerce por SKU.
- * Version: 1.7.0
+ * Version: 1.7.1
  * Author: Enmanuel Nava
  * Author URI: https://interkambio.com/
  * Requires at least: 5.8
@@ -17,7 +17,7 @@
  * Domain Path: /languages
  *
  * @package UpdateProductsBySKU
- * @version 1.7.0
+ * @version 1.7.1
  * @author Enmanuel
  */
 
@@ -77,6 +77,7 @@ add_action('rest_api_init', function () {
                     'exists' => true,
                     'published' => $status === 'publish',
                     'status' => $status,
+                    'product_id' => $product_id,
                 ];
             }
 
