@@ -4,7 +4,7 @@
  * Plugin Name: Update Products by SKU (Batch Endpoint)
  * Plugin URI: https://gusanitolector.pe/
  * Description: Endpoint REST personalizado para actualizar uno o varios productos de WooCommerce por SKU.
- * Version: 1.6.2
+ * Version: 1.7.0
  * Author: Enmanuel Nava
  * Author URI: https://interkambio.com/
  * Requires at least: 5.8
@@ -17,7 +17,7 @@
  * Domain Path: /languages
  *
  * @package UpdateProductsBySKU
- * @version 1.6.2
+ * @version 1.7.0
  * @author Enmanuel
  */
 
@@ -329,6 +329,35 @@ function enma_wc_update_products_by_sku_batch(WP_REST_Request $request)
                 }
             }
             $product->set_tag_ids($tag_ids);
+        }
+
+        // =========================
+        // Recomendaciones IA -> Upsells (Mapeo de SKU a ID)
+        // =========================
+        if (isset($entry['iaRecommendations']) && is_array($entry['iaRecommendations'])) {
+            $upsell_ids = [];
+
+            // Si quieres asegurarte de respetar el 'rankOrder', puedes ordenar el arreglo primero
+            usort($entry['iaRecommendations'], function ($a, $b) {
+                $rankA = isset($a['rankOrder']) ? (int) $a['rankOrder'] : 999;
+                $rankB = isset($b['rankOrder']) ? (int) $b['rankOrder'] : 999;
+                return $rankA <=> $rankB;
+            });
+
+            foreach ($entry['iaRecommendations'] as $item) {
+                if (is_array($item) && !empty($item['sku'])) {
+                    // Objeto del DTO: { "sku": "9781604332872-3803", ... }
+                    $up_product_id = wc_get_product_id_by_sku($item['sku']);
+
+                    // Solo agregamos el ID si el producto existe en la base de datos
+                    if ($up_product_id) {
+                        $upsell_ids[] = intval($up_product_id);
+                    }
+                }
+            }
+
+            // Asignamos las recomendaciones ordenadas
+            $product->set_upsell_ids($upsell_ids);
         }
 
         // Guardar cambios
